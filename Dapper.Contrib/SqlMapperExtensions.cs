@@ -10,6 +10,8 @@ using System.Reflection.Emit;
 using Dapper;
 
 #if COREFX
+using IDbTransaction = System.Data.Common.DbTransaction;
+using IDbConnection = System.Data.Common.DbConnection;
 using DataException = System.InvalidOperationException;
 #else
 using System.Threading;
@@ -131,7 +133,7 @@ namespace Dapper.Contrib.Extensions
 
         private static PropertyInfo GetSingleKey<T>(string method)
         {
-            var type = typeof (T);
+            var type = typeof(T);
             var keys = KeyPropertiesCache(type);
             var explicitKeys = ExplicitKeyPropertiesCache(type);
             var keyCount = keys.Count + explicitKeys.Count;
@@ -173,8 +175,7 @@ namespace Dapper.Contrib.Extensions
             dynParms.Add("@id", id);
 
             T obj;
-
-            if (type.IsInterface())
+            if (type.IsInterface)
             {
                 var res = connection.Query(sql, dynParms).FirstOrDefault() as IDictionary<string, object>;
 
@@ -224,7 +225,7 @@ namespace Dapper.Contrib.Extensions
                 GetQueries[cacheType.TypeHandle] = sql;
             }
 
-            if (!type.IsInterface()) return connection.Query<T>(sql, null, transaction, commandTimeout: commandTimeout);
+            if (!type.IsInterface) return connection.Query<T>(sql, null, transaction, commandTimeout: commandTimeout);
 
             var result = connection.Query(sql);
             var list = new List<T>();
@@ -269,7 +270,7 @@ namespace Dapper.Contrib.Extensions
                 else
                 {
                     name = type.Name + "s";
-                    if (type.IsInterface() && name.StartsWith("I"))
+                    if (type.IsInterface && name.StartsWith("I"))
                         name = name.Substring(1);
                 }
             }
@@ -298,7 +299,7 @@ namespace Dapper.Contrib.Extensions
                 isList = true;
                 type = type.GetElementType();
             }
-            else if (type.IsGenericType())
+            else if (type.IsGenericType)
             {
                 isList = true;
                 type = type.GetGenericArguments()[0];
@@ -372,7 +373,7 @@ namespace Dapper.Contrib.Extensions
             {
                 type = type.GetElementType();
             }
-            else if (type.IsGenericType())
+            else if (type.IsGenericType)
             {
                 type = type.GetGenericArguments()[0];
             }
@@ -392,7 +393,7 @@ namespace Dapper.Contrib.Extensions
             var computedProperties = ComputedPropertiesCache(type);
             var nonIdProps = allProperties.Except(keyProperties.Union(computedProperties)).ToList();
 
-            var adapter = GetFormatter(connection); 
+            var adapter = GetFormatter(connection);
 
             for (var i = 0; i < nonIdProps.Count; i++)
             {
@@ -433,7 +434,7 @@ namespace Dapper.Contrib.Extensions
             {
                 type = type.GetElementType();
             }
-            else if (type.IsGenericType())
+            else if (type.IsGenericType)
             {
                 type = type.GetGenericArguments()[0];
             }
@@ -484,7 +485,7 @@ namespace Dapper.Contrib.Extensions
         /// Please note that this callback is global and will be used by all the calls that require a database specific adapter.
         /// </summary>
         public static GetDatabaseTypeDelegate GetDatabaseType;
-        
+
         private static ISqlAdapter GetFormatter(IDbConnection connection)
         {
             var name = GetDatabaseType?.Invoke(connection).ToLower()
@@ -651,7 +652,7 @@ namespace Dapper.Contrib.Extensions
     {
         public TableAttribute(string tableName)
         {
-            Name = tableName;
+            Name = (tableName.StartsWith("\"")) ? tableName : "\"" + tableName + "\"";
         }
 
         // ReSharper disable once MemberCanBePrivate.Global
@@ -689,7 +690,7 @@ namespace Dapper.Contrib.Extensions
 public partial interface ISqlAdapter
 {
     int Insert(IDbConnection connection, IDbTransaction transaction, int? commandTimeout, string tableName, string columnList, string parameterList, IEnumerable<PropertyInfo> keyProperties, object entityToInsert);
-    
+
     //new methods for issue #336
     void AppendColumnName(StringBuilder sb, string columnName);
     void AppendColumnNameEqualsValue(StringBuilder sb, string columnName);
@@ -735,7 +736,7 @@ public partial class SqlCeServerAdapter : ISqlAdapter
         var r = connection.Query("select @@IDENTITY id", transaction: transaction, commandTimeout: commandTimeout).ToList();
 
         if (r.First().id == null) return 0;
-        var id = (int) r.First().id;
+        var id = (int)r.First().id;
 
         var propertyInfos = keyProperties as PropertyInfo[] ?? keyProperties.ToArray();
         if (!propertyInfos.Any()) return id;
@@ -808,7 +809,7 @@ public partial class PostgresAdapter : ISqlAdapter
                 if (!first)
                     sb.Append(", ");
                 first = false;
-                sb.Append(property.Name);
+                AppendColumnName(sb, property.Name);
             }
         }
 
@@ -818,7 +819,7 @@ public partial class PostgresAdapter : ISqlAdapter
         var id = 0;
         foreach (var p in propertyInfos)
         {
-            var value = ((IDictionary<string, object>)results.First())[p.Name.ToLower()];
+            var value = ((IDictionary<string, object>)results.First()).Single(x => x.Key.ToLower() == p.Name.ToLower()).Value;
             p.SetValue(entityToInsert, value, null);
             if (id == 0)
                 id = Convert.ToInt32(value);
